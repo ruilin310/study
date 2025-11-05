@@ -1,0 +1,3 @@
+java-ai-310
+id  LTAI5tSFswd4HcEPgsmcBpLo
+secret  h6SjvZHIVsnK15f9FusDbndEV6e6Ks
