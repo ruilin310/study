@@ -420,13 +420,7 @@ FinalShell登陆终端后，==默认的工作目录就是用户的HOME目录==
 
 命令： `yum install vim`
 
-![img](https://kcni3moi6499.feishu.cn/space/api/box/stream/download/asynccode/?code=OWRlNzUzNzNmYjZiM2Y1ZWRiNThiOTAwZDcyZDljMjlfYU5aM1BJSmlwRDJMMmlQbDNrWUVGektTcHoxQVpjOXBfVG9rZW46QVZsMGJFcWR4b0VZdzZ4bmRxVWNWOFVwbjVjXzE3NjI1OTk5NDk6MTc2MjYwMzU0OV9WNA)
-
-安装过程中，会有确认提示，此时输入 y，然后回车，继续安装：
-
-![img](https://kcni3moi6499.feishu.cn/space/api/box/stream/download/asynccode/?code=MWRjOTgxODIwODUwYzE0MDFiZDE2OWQ0YzhlMjFjNzdfT1UyQ0FOM0x1a0ljNTdlRDRVQ3pua2FwSkduRjZNRDJfVG9rZW46WFgzYmJyOTFtbzZZSVR4QnFlb2Nxc3NNbm5oXzE3NjI1OTk5NDk6MTc2MjYwMzU0OV9WNA)
-
-![img](https://kcni3moi6499.feishu.cn/space/api/box/stream/download/asynccode/?code=OGJmNGZhYTY2MWZmZTliOTliZTQxMmViMWFhMzEyZmFfekI5VW02cFppQUhxRHVGWFVSQ21sSkdleUF1Sms0SVZfVG9rZW46T2xTV2I5MW5Fb2kzY1R4VWZtNWNESEtqbnBmXzE3NjI1OTk5NDk6MTc2MjYwMzU0OV9WNA)
+安装过程中，会有确认提示，此时输入 y，然后回车，继续安装
 
 ### vim使用
 
@@ -795,6 +789,8 @@ FinalShell登陆终端后，==默认的工作目录就是用户的HOME目录==
 ### 端口
 
 #### nmap命令
+
+可以查看其他机器的端口
 
 <img src="assets/20221027221241.png" alt="image-20221027221241123" style="zoom:80%;" />
 
