@@ -35,7 +35,7 @@
 
 ### 双端队列（Deque）简述
 
-双向队列(Deque),是Queue的一个子==接口==，双向队列是指该队列两端的元素既能入队(offer)也能出队(poll),如果将Deque限制为只能从一端入队和出队，则可实现栈的数据结构。对于栈而言，有入栈(push)和出栈(pop)，遵循先进后出原则。-->实现类LinkedList
+双向队列(Deque),是Queue的一个子==接口==，双向队列是指该队列两端的元素既能入队(offer)也能出队(poll),如果将Deque限制为只能从一端入队和出队，则可实现栈的数据结构。对于栈而言，有入栈(push)和出栈(pop)，遵循先进后出原则。-->==实现类LinkedList==
 
 一个线性 collection，支持在两端插入和移除元素。名称 *deque* 是“double ended queue（双端队列）”的缩写，通常读为“deck”。大多数 `Deque` 实现对于它们能够包含的元素数没有固定限制，但此接口既支持有容量限制的双端队列，也支持没有固定大小限制的双端队列。
 
@@ -67,7 +67,7 @@
 | [`element()`](http://tool.oschina.net/uploads/apidocs/jdk-zh/java/util/Queue.html#element()) | [`getFirst()`](http://tool.oschina.net/uploads/apidocs/jdk-zh/java/util/Deque.html#getFirst()) |
 | [`peek()`](http://tool.oschina.net/uploads/apidocs/jdk-zh/java/util/Queue.html#peek()) | [`peekFirst()`](http://tool.oschina.net/uploads/apidocs/jdk-zh/java/util/Deque.html#peek()) |
 
-双端队列也可用作 LIFO（后进先出）堆栈。应优先使用此接口而不是遗留 [`Stack`](http://tool.oschina.net/uploads/apidocs/jdk-zh/java/util/Stack.html) 类。在将双端队列用作堆栈时，元素被推入双端队列的开头并从双端队列开头弹出。堆栈方法完全等效于 `Deque` 方法，如下表所示：
+双端队列也可用作 LIFO（后进先出）堆栈。应==优先使用此接口而不是遗留 [`Stack`](http://tool.oschina.net/uploads/apidocs/jdk-zh/java/util/Stack.html) 类==。在将双端队列用作堆栈时，元素被推入双端队列的开头并从双端队列开头弹出。堆栈方法完全等效于 `Deque` 方法，如下表所示：
 
  
 
@@ -84,3 +84,9 @@
 与 [`List`](http://tool.oschina.net/uploads/apidocs/jdk-zh/java/util/List.html) 接口不同，此接口不支持通过索引访问元素。
 
 虽然 `Deque` 实现没有严格要求禁止插入 null 元素，但建议最好这样做。建议任何事实上允许 null 元素的 `Deque` 实现用户最好*不* 要利用插入 null 的功能。这是因为各种方法会将 `null` 用作特殊的返回值来指示双端队列为空。
+
+
+
+### ==队列的调用==
+
+queue和deque都是借口，而linkedList实现了这两个接口，所以创建方式为`Deque deque = new LinkedList<>()`==？==
