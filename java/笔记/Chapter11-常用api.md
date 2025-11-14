@@ -141,7 +141,7 @@ System.out.println(integer == i);//Ture
 
 方式二：调用构造器 `String s2 = new String("hsp");`
 
-方式三：`String str = String.valueOf();` -->底层是调用传入参数的toString方法，将其转成字符串
+方式三：`String str = String.valueOf();` -->底层是调用传入参数的==toString==方法，将其转成字符串
 
 **区别**
 

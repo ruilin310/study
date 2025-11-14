@@ -1,4 +1,4 @@
-# 实战篇Redis
+## 实战篇Redis
 
 ## 开篇导读
 
@@ -48,7 +48,7 @@
 
 #### 1.1.1 、导入SQL
 
-![1653057872536](assets/1653057872536.png)
+<img src="assets/1653057872536.png" alt="1653057872536" style="zoom:67%;" />
 
 #### 1.1.2、有关当前模型
 
@@ -169,7 +169,7 @@
 
 当用户发起请求时，会访问我们像tomcat注册的端口，任何程序想要运行，都需要有一个线程对当前端口号进行监听，tomcat也不例外，当监听线程知道用户想要和tomcat连接连接时，那会由监听线程创建socket连接，socket都是成对出现的，用户通过socket像互相传递数据，当tomcat端的socket接受到数据后，此时监听线程会从tomcat的线程池中取出一个线程执行用户请求，在我们的服务部署到tomcat后，线程会找到用户想要访问的工程，然后用这个线程转发到工程中的controller，service，dao中，并且访问对应的DB，在用户执行完请求后，再统一返回，再找到tomcat端的socket，再将数据写回到用户端的socket，完成请求和响应
 
-通过以上讲解，我们可以得知 每个用户其实对应都是去找tomcat线程池中的一个线程来完成工作的， 使用完成后再进行回收，既然每个请求都是独立的，所以在每个用户去访问我们的工程时，我们可以使用threadlocal来做到线程隔离，每个线程操作自己的一份数据
+通过以上讲解，我们可以得知 **每个用户**其实对应都是去找tomcat线程池中的==一个线程==来完成工作的， 使用完成后再进行回收，既然每个请求都是独立的，所以在每个用户去访问我们的工程时，我们可以==使用threadlocal来做到线程隔离==，每个线程操作自己的一份数据
 
 
 
@@ -236,7 +236,7 @@ public class MvcConfig implements WebMvcConfigurer {
 
 ### 1.5、隐藏用户敏感信息
 
-我们通过浏览器观察到此时用户的全部信息都在，这样极为不靠谱，所以我们应当在返回用户信息之前，将用户的敏感信息进行隐藏，采用的核心思路就是书写一个UserDto对象，这个UserDto对象就没有敏感信息了，我们在返回前，将有用户敏感信息的User对象转化成没有敏感信息的UserDto对象，那么就能够避免这个尴尬的问题了
+我们通过浏览器观察到此时用户的全部信息都在，这样极为不靠谱，所以我们应当在返回用户信息之前，将用户的敏感信息进行隐藏，采用的核心思路就是书写一个UserDto对象，这个UserDto对象就没有敏感信息了，我们在返回前，将有用户敏感信息的User对象转化成没有敏感信息的UserDto对象，那么就能够避免这个尴尬的问题了-->dto ==数据传输实体==（data transfer object）
 
 **在登录方法处修改**
 
@@ -288,6 +288,11 @@ public class UserHolder {
 
 ![1653069893050](assets/1653069893050.png)
 
+1. redis不存储在tomcat上，可以实现数据共享
+
+2. session和redis都是内存存储
+3. 两者都是key-value结果
+
 ### 1.7 Redis代替session的业务流程
 
 #### 1.7.1、设计key的结构
@@ -298,7 +303,7 @@ public class UserHolder {
 
 #### 1.7.2、设计key的具体细节
 
-所以我们可以使用String结构，就是一个简单的key，value键值对的方式，但是关于key的处理，session他是每个用户都有自己的session，但是redis的key是共享的，咱们就不能使用code了
+所以我们可以使用String结构，就是一个简单的key，value键值对的方式，但是关于key的处理，**session他是每个用户都有自己的session，但是redis的key是共享的，咱们就不能使用code了**
 
 在设计这个key的时候，我们之前讲过需要满足两点
 
@@ -323,6 +328,25 @@ public class UserHolder {
 **UserServiceImpl代码**
 
 ```java
+//发送验证码
+@Override
+public Result sendCode(String phone, HttpSession session) {
+    // 1. 校验手机号
+    if (RegexUtils.isPhoneInvalid(phone)) {
+        // 2. 如果不符合，返回错误信息
+        return Result.fail("手机号格式错误！");
+    }
+    // 3. 符合，生成验证码
+    String code = RandomUtil.randomNumbers(6);
+    // 4. 保存验证码到 Redis，设置过期时间为 2 分钟
+    stringRedisTemplate.opsForValue().set(LOGIN_CODE_KEY + phone, code, LOGIN_CODE_TTL, TimeUnit.MINUTES);
+    // 5. 发送验证码（模拟）
+    log.debug("发送短信验证码成功，验证码：{}", code);
+    // 返回成功
+    return Result.ok();
+}
+
+//登录、注册
 @Override
 public Result login(LoginFormDTO loginForm, HttpSession session) {
     // 1.校验手机号
@@ -356,11 +380,11 @@ public Result login(LoginFormDTO loginForm, HttpSession session) {
     Map<String, Object> userMap = BeanUtil.beanToMap(userDTO, new HashMap<>(),
             CopyOptions.create()
                     .setIgnoreNullValue(true)
-                    .setFieldValueEditor((fieldName, fieldValue) -> fieldValue.toString()));
+                    .setFieldValueEditor((fieldName, fieldValue) -> fieldValue.toString()));//将dto中long->String,防止stringRedisTemplate添加hash字段时出现类型转换异常(feild和value都得是String )
     // 7.3.存储
     String tokenKey = LOGIN_USER_KEY + token;
     stringRedisTemplate.opsForHash().putAll(tokenKey, userMap);
-    // 7.4.设置token有效期
+    // 7.4.设置token有效期-->去除登录状态，不是删除用户数据
     stringRedisTemplate.expire(tokenKey, LOGIN_USER_TTL, TimeUnit.MINUTES);
 
     // 8.返回token
@@ -372,13 +396,13 @@ public Result login(LoginFormDTO loginForm, HttpSession session) {
 
 #### 1.9.1 初始方案思路总结：
 
-在这个方案中，他确实可以使用对应路径的拦截，同时刷新登录token令牌的存活时间，但是现在这个拦截器他只是拦截需要被拦截的路径，假设当前用户访问了一些不需要拦截的路径，那么这个拦截器就不会生效，所以此时令牌刷新的动作实际上就不会执行，所以这个方案他是存在问题的
+在这个方案中，他确实可以使用对应路径的拦截，同时==刷新登录token令牌的存活时间==（退出登录状态，不删除用户信息），但是现在这个拦截器他只是拦截需要被拦截的路径，假设当前用户访问了一些不需要拦截的路径，那么这个拦截器就不会生效，所以此时令牌刷新的动作实际上就不会执行，所以这个方案他是存在问题的
 
 ![1653320822964](assets/1653320822964.png)
 
 ####  1.9.2 优化方案
 
-既然之前的拦截器无法对不需要拦截的路径生效，那么我们可以添加一个拦截器，在第一个拦截器中拦截所有的路径，把第二个拦截器做的事情放入到第一个拦截器中，同时刷新令牌，因为第一个拦截器有了threadLocal的数据，所以此时第二个拦截器只需要判断拦截器中的user对象是否存在即可，完成整体刷新功能。
+既然之前的拦截器无法对不需要拦截的路径生效，那么我们可以==添加一个拦截器==，在第一个拦截器中拦截所有的路径，把第二个拦截器做的事情放入到第一个拦截器中，同时刷新令牌，因为第一个拦截器有了threadLocal的数据，所以此时第二个拦截器只需要判断拦截器中的user对象是否存在即可，完成整体刷新功能。
 
 ![1653320764547](assets/1653320764547.png)
 
@@ -510,6 +534,8 @@ public class LoginInterceptor implements HandlerInterceptor {
 
 ### 2.2 添加商户缓存
 
+
+
 在我们查询商户信息时，我们是直接操作从数据库中去进行查询的，大致逻辑是这样，直接查询数据库那肯定慢咯，所以我们需要增加缓存
 
 ```
@@ -548,47 +574,56 @@ public Result queryShopById(@PathVariable("id") Long id) {
 
 #### 2.3.1 、数据库缓存不一致解决方案：
 
-
-
 由于我们的**缓存的数据源来自于数据库**,而数据库的**数据是会发生变化的**,因此,如果当数据库中**数据发生变化,而缓存却没有同步**,此时就会有**一致性问题存在**,其后果是:
 
-用户使用缓存中的过时数据,就会产生类似多线程数据安全问题,从而影响业务,产品口碑等;怎么解决呢？有如下几种方案
+用户使用缓存中的过时数据,就会产生类似多线程数据安全问题,从而影响业务,产品口碑等;怎么解决呢？
 
-Cache Aside Pattern 人工编码方式：缓存调用者在更新完数据库后再去更新缓存，也称之为双写方案
 
-Read/Write Through Pattern : 由系统本身完成，数据库与缓存的问题交由系统本身去处理
 
-Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步处理数据库，实现最终一致
+**主动更新策略：**
+
+- Cache Aside Pattern 人工编码方式：缓存调用者在更新完数据库后再去更新缓存，也称之为双写方案
+
+- Read/Write Through Pattern : 由系统本身完成，数据库与缓存的问题交由系统本身去处理
+
+- Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步处理数据库，实现最终一致
+  - 只对缓存进行操作，若缓存数据变化，则写入数据库-->将缓存当数据库使用
 
 ![1653322857620](assets/1653322857620.png)
 
-#### 2.3.2 、数据库和缓存不一致采用什么方案
+#### 2.3.2 、数据库和缓存不一致采用什么方案（方案一）
 
 综合考虑使用方案一，但是方案一调用者如何处理呢？这里有几个问题
 
 操作缓存和数据库时有三个问题需要考虑：
 
-
-
 如果采用第一个方案，那么假设我们每次操作数据库后，都操作缓存，但是中间如果没有人查询，那么这个更新动作实际上只有最后一次生效，中间的更新动作意义并不大，我们可以把缓存删除，等待再次查询时，将缓存中的数据加载出来
 
 * 删除缓存还是更新缓存？
   * 更新缓存：每次更新数据库都更新缓存，无效写操作较多
-  * 删除缓存：更新数据库时让缓存失效，查询时再更新缓存
+  * ==删除缓存==：更新数据库时让缓存失效，查询时再更新缓存-->选这个
 
 * 如何保证缓存与数据库的操作的同时成功或失败？
-  * 单体系统，将缓存与数据库操作放在一个事务
+  * 单体系统，将缓存与数据库操作放在一个==事务==
   * 分布式系统，利用TCC等分布式事务方案
 
-应该具体操作缓存还是操作数据库，我们应当是先操作数据库，再删除缓存，原因在于，如果你选择第一种方案，在两个线程并发来访问时，假设线程1先来，他先把缓存删了，此时线程2过来，他查询缓存数据并不存在，此时他写入缓存，当他写入缓存后，线程1再执行更新动作时，实际上写入的就是旧的数据，新的数据被旧数据覆盖了。
-
-* 先操作缓存还是先操作数据库？
+* 先操作缓存还是先操作数据库？-->==线程安全==
   * 先删除缓存，再操作数据库
-  * 先操作数据库，再删除缓存
+  * 先操作数据库，再删除缓存-->选这个，==要用事务==
+  
+  应该具体操作缓存还是操作数据库，我们应当是先操作数据库，再删除缓存，原因在于，如果你选择第一种方案，在两个线程并发来访问时，假设线程1先来，他先把缓存删了，此时线程2过来，他查询缓存数据并不存在，此时他写入缓存，当他写入缓存后，线程1再执行更新动作时，实际上写入的就是旧的数据，新的数据被旧数据覆盖了。-->==要用事务==
 
 ![1653323595206](assets/1653323595206.png)
 
 
+
+第二种是脏读，缓存会写入第一次查询到的旧数据
+
+写入数据库很慢，而写入缓存极快，所以第一种错误发生概率较高，第二种发生概率较低，所以选择第二种
+
+#### 2.3.3、缓存更新的最佳策略
+
+![image-20251112150938780](assets/image-20251112150938780.png)
 
 ### 2.4 实现商铺和缓存与数据库双写一致
 
@@ -618,10 +653,10 @@ Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步
 
 常见的解决方案有两种：
 
-* 缓存空对象
+* 缓存空对象（空字符串，==不是null==）
   * 优点：实现简单，维护方便
   * 缺点：
-    * 额外的内存消耗
+    * 额外的内存消耗-->可以通过设置短时间的TTL解决
     * 可能造成短期的不一致
 * 布隆过滤
   * 优点：内存占用较少，没有多余key
@@ -633,13 +668,17 @@ Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步
 
 **缓存空对象思路分析：**当我们客户端访问不存在的数据时，先请求redis，但是此时redis中没有数据，此时会访问到数据库，但是数据库中也没有数据，这个数据穿透了缓存，直击数据库，我们都知道数据库能够承载的并发不如redis这么高，如果大量的请求同时过来访问这种不存在的数据，这些请求就都会访问到数据库，简单的解决方案就是哪怕这个数据在数据库中也不存在，我们也把这个数据存入到redis中去，这样，下次用户过来访问这个不存在的数据，那么在redis中也能找到这个数据就不会进入到缓存了
 
+==我们可以给缓存的空对象设置一个较短的TTL==
+
 
 
 **布隆过滤：**布隆过滤器其实采用的是哈希思想来解决这个问题，通过一个庞大的二进制数组，走哈希思想去判断当前这个要查询的这个数据是否存在，如果布隆过滤器判断存在，则放行，这个请求会去访问redis，哪怕此时redis中的数据过期了，但是数据库中一定存在这个数据，在数据库中查询出来这个数据后，再将其放入到redis中，
 
 假设布隆过滤器判断这个数据不存在，则直接返回
 
-这种方式优点在于节约内存空间，存在误判，误判原因在于：布隆过滤器走的是哈希思想，只要哈希思想，就可能存在哈希冲突
+这种方式优点在于节约内存空间，存在误判，误判原因在于：布隆过滤器走的是哈希思想，只要哈希思想，就可能存在==哈希冲突==
+
+==不存在则一定不存在，存在不一定存在==
 
 ![1653326156516](assets/1653326156516.png)
 
@@ -665,7 +704,7 @@ Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步
 
 缓存穿透的解决方案有哪些？
 
-* 缓存null值
+* 缓存空值（空字符串，不是null）
 * 布隆过滤
 * 增强id的复杂度，避免被猜测id规律
 * 做好数据的基础格式校验
@@ -676,7 +715,7 @@ Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步
 
 ### 2.7 缓存雪崩问题及解决思路
 
-缓存雪崩是指在同一时段大量的缓存key同时失效或者Redis服务宕机，导致大量请求到达数据库，带来巨大压力。
+缓存雪崩是指在同一时段大量的缓存key同时失效(==TTL一致==)或者Redis服务宕机，导致大量请求到达数据库，带来巨大压力。
 
 解决方案：
 
@@ -689,11 +728,13 @@ Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步
 
 ### 2.8 缓存击穿问题及解决思路
 
+==本质是为缓存重建的过程添加锁==
+
 缓存击穿问题也叫热点Key问题，就是一个被高并发访问并且缓存重建业务较复杂的key突然失效了，无数的请求访问会在瞬间给数据库带来巨大的冲击。
 
 常见的解决方案有两种：
 
-* 互斥锁
+* 互斥锁-->==sentnx==
 * 逻辑过期
 
 逻辑分析：假设线程1在查询缓存之后，本来应该去查询数据库，然后把这个数据重新加载到缓存的，此时只要线程1走完这个逻辑，其他线程就都能从缓存中加载这些数据了，但是假设在线程1没有走完的时候，后续的线程2，线程3，线程4同时过来访问当前这个方法， 那么这些线程都不能从缓存中查询到数据，那么他们就会同一时刻来访问查询缓存，都没查到，接着同一时间去访问数据库，同时的去执行数据库代码，对数据库访问压力过大
@@ -704,9 +745,9 @@ Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步
 
 
 
-解决方案一、使用锁来解决：
+解决方案一、使用锁来解决：-->==setnx==
 
-因为锁能实现互斥性。假设线程过来，只能一个人一个人的来访问数据库，从而避免对于数据库访问压力过大，但这也会影响查询的性能，因为此时会让查询的性能从并行变成了串行，我们可以采用tryLock方法 + double check来解决这样的问题。
+因为锁能实现互斥性。假设线程过来，只能一个人一个人的来访问数据库，从而避免对于数据库访问压力过大，但这也会影响查询的性能，因为此时会让查询的性能从并行变成了串行，我们可以采用==tryLock==方法 + ==double check==来解决这样的问题。
 
 假设现在线程1过来访问，他查询缓存没有命中，但是此时他获得到了锁的资源，那么线程1就会一个人去执行逻辑，假设现在线程2过来，线程2在执行过程中，并没有获得到锁，那么线程2就可以进行到休眠，直到线程1把锁释放后，线程2获得到锁，然后再来执行逻辑，此时就能够从缓存中拿到数据了。
 
@@ -718,15 +759,21 @@ Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步
 
 我们把过期时间设置在 redis的value中，注意：这个过期时间并不会直接作用于redis，而是我们后续通过逻辑去处理。假设线程1去查询缓存，然后从value中判断出来当前的数据已经过期了，此时线程1去获得互斥锁，那么其他线程会进行阻塞，获得了锁的线程他会开启一个 线程去进行 以前的重构数据的逻辑，直到新开的线程完成这个逻辑后，才释放锁， 而线程1直接进行返回，假设现在线程3过来访问，由于线程线程2持有着锁，所以线程3无法获得锁，线程3也直接返回数据，只有等到新开的线程2把重建数据构建完后，其他线程才能走返回正确的数据。
 
-这种方案巧妙在于，异步的构建缓存，缺点在于在构建完缓存之前，返回的都是脏数据。
+这种方案巧妙在于，异步的构建缓存，缺点在于在构建完缓存之前，返回的都是**脏数据**。
 
-![1653328663897](assets/1653328663897.png)
+<img src="assets/1653328663897.png" alt="1653328663897" style="zoom:67%;" />
 
-进行对比
 
-**互斥锁方案：**由于保证了互斥性，所以数据一致，且实现简单，因为仅仅只需要加一把锁而已，也没其他的事情需要操心，所以没有额外的内存消耗，缺点在于有锁就有死锁问题的发生，且只能串行执行性能肯定受到影响
 
-**逻辑过期方案：** 线程读取过程中不需要等待，性能好，有一个额外的线程持有锁去进行重构数据，但是在重构数据完成前，其他的线程只能返回之前的数据，且实现起来麻烦
+**互斥锁方案：**由于保证了互斥性，所以数据一致，且实现简单，因为仅仅只需要加一把锁而已，也没其他的事情需要操心，所以没有额外的内存消耗，缺点在于有锁就有**死锁**问题的发生，且只能**串行**执行性能肯定受到影响-->==setnx==
+
+- ==在前面缓存一致和缓存穿透的基础上实现==-->有穿透问题
+
+**逻辑过期方案：** 线程读取过程中**不需要等待**，性能好，有一个**额外的线程**持有锁去进行重构数据，但是在重构数据完成前，其他的线程只能**返回之前的数据**，且实现起来麻烦
+
+- 会事先预热，redis中数据一直存在，只有新旧问题，==不会有穿透问题==-->**其他**因为需要从数据库查去数据，所以需要考虑穿透问题、
+
+==缓存击穿本质是为缓存重建的过程添加锁==
 
 ![1653357522914](assets/1653357522914.png)
 
@@ -736,11 +783,11 @@ Write Behind Caching Pattern ：调用者只操作缓存，其他线程去异步
 
 如果获取到了锁的线程，再去进行查询，查询后将数据写入redis，再释放锁，返回数据，利用互斥锁就能保证只有一个线程去执行操作数据库的逻辑，防止缓存击穿
 
-![1653357860001](assets/1653357860001.png)
+<img src="assets/1653357860001.png" alt="1653357860001" style="zoom: 67%;" />
 
 **操作锁的代码：**
 
-核心思路就是利用redis的setnx方法来表示获取锁，该方法含义是redis中如果没有这个key，则插入成功，返回1，在stringRedisTemplate中返回true，  如果有这个key则插入失败，则返回0，在stringRedisTemplate返回false，我们可以通过true，或者是false，来表示是否有线程成功插入key，成功插入的key的线程我们认为他就是获得到锁的线程。
+核心思路就是==利用redis的setnx方法来表示获取锁==，该方法含义是redis中如果没有这个key，则插入成功，返回1，在stringRedisTemplate中返回true，  如果有这个key则插入失败，则返回0，在stringRedisTemplate返回false，我们可以通过true，或者是false，来表示是否有线程成功插入key，成功插入的key的线程我们认为他就是获得到锁的线程。
 
 ```java
 private boolean tryLock(String key) {
@@ -752,6 +799,8 @@ private void unlock(String key) {
     stringRedisTemplate.delete(key);
 }
 ```
+
+==tryLock的返回值不要直接返回flag,因为它可能为null,要借用BooleanUtil工具类==
 
 **操作代码：**
 
@@ -805,21 +854,27 @@ private void unlock(String key) {
     }
 ```
 
-###  3.0 、利用逻辑过期解决缓存击穿问题
+###  2.10 、利用逻辑过期解决缓存击穿问题
 
 **需求：修改根据id查询商铺的业务，基于逻辑过期方式来解决缓存击穿问题**
 
 思路分析：当用户开始查询redis时，判断是否命中，如果没有命中则直接返回空数据，不查询数据库，而一旦命中后，将value取出，判断value中的过期时间是否满足，如果没有过期，则直接返回redis中的数据，如果过期，则在开启独立线程后直接返回之前的数据，独立线程去重构数据，重构完成后释放互斥锁。
 
-![1653360308731](assets/1653360308731.png)
+<img src="assets/1653360308731.png" alt="1653360308731" style="zoom: 67%;" />
 
 
 
-如果封装数据：因为现在redis中存储的数据的value需要带上过期时间，此时要么你去修改原来的实体类，要么你
+==因为是逻辑过期，所以一定命中；若未命中，则说明查询的数据不在活动内，不需要从数据库查询数据，直接返回null==
+
+**逻辑过期**：==会事先预热，redis中数据一直存在，只有新旧问题，不会有穿透问题====-->**其他**因为需要从数据库查去数据，所以需要考虑穿透问题
 
 **步骤一、**
 
-新建一个实体类，我们采用第二个方案，这个方案，对原来代码没有侵入性。
+如果封装数据：因为现在redis中存储的数据的value需要带上过期时间，此时要么你去修改原来的实体类，要么你新建一个实体类。我们采用第二个方案，这个方案，对原来代码没有侵入性。
+
+1. 让原来的实体类继承新的实体类
+2. 在新的实体类中创建Object类型的属性data，用来存储原本的实体类-->选第二种
+   1. ==从json转为bean时，redisData.data实际上是JsonObject类型，要转换为相应的类型==
 
 ```
 @Data
@@ -831,13 +886,13 @@ public class RedisData {
 
 **步骤二、**
 
-在**ShopServiceImpl** 新增此方法，利用单元测试进行缓存预热
+在**ShopServiceImpl** 新增此方法，利用==单元测试==进行==缓存预热==
 
 ![1653360807133](assets/1653360807133.png)
 
 **在测试类中**
 
-![1653360864839](assets/1653360864839.png)
+<img src="assets/1653360864839.png" alt="1653360864839" style="zoom: 67%;" />
 
 步骤三：正式代码
 
@@ -856,6 +911,7 @@ public Shop queryWithLogicalExpire( Long id ) {
     }
     // 4.命中，需要先把json反序列化为对象
     RedisData redisData = JSONUtil.toBean(json, RedisData.class);
+    //redisData.data实际上是JsonObject类型，要转换为shop类型
     Shop shop = JSONUtil.toBean((JSONObject) redisData.getData(), Shop.class);
     LocalDateTime expireTime = redisData.getExpireTime();
     // 5.判断是否过期
@@ -887,17 +943,25 @@ public Shop queryWithLogicalExpire( Long id ) {
 }
 ```
 
-### 3.1、封装Redis工具类
+<img src="assets/image-20251113113419628.png" alt="image-20251113113419628" style="zoom: 50%;" />
+
+### 2.11、封装Redis工具类
 
 基于StringRedisTemplate封装一个缓存工具类，满足下列需求：
 
 * 方法1：将任意Java对象序列化为json并存储在string类型的key中，并且可以设置TTL过期时间
+
 * 方法2：将任意Java对象序列化为json并存储在string类型的key中，并且可以设置逻辑过期时间，用于处理缓
 
 存击穿问题
 
 * 方法3：根据指定的key查询缓存，并反序列化为指定类型，利用缓存空值的方式解决缓存穿透问题
-* 方法4：根据指定的key查询缓存，并反序列化为指定类型，需要利用逻辑过期解决缓存击穿问题
+* 方法4：根据指定的key查询缓存，并反序列化为指定类型，需要利用互斥锁解决缓存击穿问题
+* 方法5：根据指定的key查询缓存，并反序列化为指定类型，需要利用逻辑过期解决缓存击穿问题
+
+1-->3，4
+
+2-->5
 
 将逻辑进行封装
 
@@ -1003,7 +1067,7 @@ public class CacheClient {
     }
 
     public <R, ID> R queryWithMutex(
-            String keyPrefix, ID id, Class<R> type, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
+            String keyPrefix, ID id, Class<R> type,String lockPrefix, Function<ID, R> dbFallback, Long time, TimeUnit unit) {
         String key = keyPrefix + id;
         // 1.从redis查询商铺缓存
         String shopJson = stringRedisTemplate.opsForValue().get(key);
@@ -1020,7 +1084,7 @@ public class CacheClient {
 
         // 4.实现缓存重建
         // 4.1.获取互斥锁
-        String lockKey = LOCK_SHOP_KEY + id;
+        String lockKey = lockPrefix + id;
         R r = null;
         try {
             boolean isLock = tryLock(lockKey);
@@ -1028,7 +1092,7 @@ public class CacheClient {
             if (!isLock) {
                 // 4.3.获取锁失败，休眠并重试
                 Thread.sleep(50);
-                return queryWithMutex(keyPrefix, id, type, dbFallback, time, unit);
+                return queryWithMutex(keyPrefix, id,lockPrefix, type, dbFallback, time, unit);
             }
             // 4.4.获取锁成功，根据id查询数据库
             r = dbFallback.apply(id);
@@ -1090,6 +1154,14 @@ private CacheClient cacheClient;
     }
 ```
 
+- set方法存储到缓存需要value,而value时查数据库得来的，所以set方法只在工具类中调用，不在外部调用
+
+- 外部类想要完成缓存==预热==，需要单独定义方法-->工具类的query方法已提供缓存重建，不需要单独定义方法
+
+![image-20251113171700153](assets/image-20251113171700153.png)
+
+- 工具类实际上对外提供的是query方法-->外部方法一般只查显存，不会写缓存
+
 ## 3、优惠卷秒杀
 
 ### 3.1 -全局唯一ID
@@ -1098,7 +1170,7 @@ private CacheClient cacheClient;
 
 ![1653362612286](assets/1653362612286.png)
 
-当用户抢购时，就会生成订单并保存到tb_voucher_order这张表中，而订单表如果使用数据库自增ID就存在一些问题：
+当用户抢购时，就会生成订单并保存到tb_voucher_order这张表中，而订单表如果使用数据库**自增ID**就存在一些问题：
 
 * id的规律性太明显
 * 受单表数据量的限制
@@ -1107,15 +1179,32 @@ private CacheClient cacheClient;
 
 场景分析二：随着我们商城规模越来越大，mysql的单表的容量不宜超过500W，数据量过大之后，我们要进行拆库拆表，但拆分表了之后，他们从逻辑上讲他们是同一张表，所以他们的id是不能一样的， 于是乎我们需要保证id的唯一性。
 
-**全局ID生成器**，是一种在分布式系统下用来生成全局唯一ID的工具，一般要满足下列特性：
+**全局ID生成器**，是一种在分布式系统下用来生成全局唯一ID的工具，一般要满足下列特性：-->==redis自增==
 
 ![1653363100502](assets/1653363100502.png)
 
+递增性：避免mysql进行==页分裂==
+
+
+
+**全局唯一id生成策略**
+
+- UUID
+- ==Redis自增==
+- 数据库自增
+- snowflake算法
+
+
+
 为了增加ID的安全性，我们可以不直接使用Redis自增的数值，而是拼接一些其它信息：
 
-![1653363172079](assets/1653363172079.png)ID的组成部分：符号位：1bit，永远为0
+![image-20251113183725452](assets/image-20251113183725452.png)
 
-时间戳：31bit，以秒为单位，可以使用69年
+**ID的组成部分：**
+
+符号位：1bit，永远为0-->整数
+
+时间戳：31bit，以秒为单位，可以使用69年-->有一个基数，起始时间
 
 序列号：32bit，秒内的计数器，支持每秒产生2^32个不同ID
 
@@ -1157,11 +1246,17 @@ public class RedisIdWorker {
 }
 ```
 
-测试类
+==最后返回long类型，时间戳和序列号不能直接拼接，要时间戳**左移**（序列号的**位数**），然后低位与序列号进行**或运算**==
+
+两者以二进制进行拼接，但最后展示的是==十进制==
+
+![image-20251113183725452](assets/image-20251113183725452.png)
+
+**测试类**
 
 知识小贴士：关于countdownlatch
 
-countdownlatch名为信号枪：主要的作用是同步协调在多线程的等待于唤醒问题
+countdownlatch名为信号枪：主要的作用是同步协调在多线程的等待与唤醒问题
 
 我们如果没有CountDownLatch ，那么由于程序是异步的，当异步程序没有执行完时，主线程就已经执行完了，然后我们期望的是分线程全部走完之后，主线程再走，所以我们此时需要使用到CountDownLatch
 
@@ -1353,7 +1448,9 @@ public Result seckillVoucher(Long voucherId) {
 
   乐观锁：会有一个版本号，每次操作数据会对版本号+1，再提交回数据时，会去校验是否比之前的版本大1 ，如果大1 ，则进行操作成功，这套机制的核心逻辑在于，如果在操作过程中，版本号只比原来大1 ，那么就意味着操作过程中没有人对他进行过修改，他的操作就是安全的，如果不大1，则数据被修改过，当然乐观锁还有一些变种的处理方式比如cas
 
-  乐观锁的典型代表：就是cas，利用cas进行无锁化机制加锁，var5 是操作前读取的内存值，while中的var1+var2 是预估值，如果预估值 == 内存值，则代表中间没有被人修改过，此时就将新值去替换 内存值
+==数据库的修改是原子动作，会自动加行锁，所以只要在操作数据库前判断一次即可，操作后不需要判断==
+
+  乐观锁的典型代表：就是cas（compare and set/switch），利用cas进行无锁化机制加锁，var5 是操作前读取的内存值，while中的var1+var2 是预估值，如果预估值 == 内存值，则代表中间没有被人修改过，此时就将新值去替换 内存值
 
   其中do while 是为了在操作失败时，再次进行自旋操作，即把之前的逻辑再操作一次。
 
@@ -1368,7 +1465,7 @@ return var5;
 
 **课程中的使用方式：**
 
-课程中的使用方式是没有像cas一样带自旋的操作，也没有对version的版本号+1 ，他的操作逻辑是在操作时，对版本号进行+1 操作，然后要求version 如果是1 的情况下，才能操作，那么第一个线程在操作后，数据库中的version变成了2，但是他自己满足version=1 ，所以没有问题，此时线程2执行，线程2 最后也需要加上条件version =1 ，但是现在由于线程1已经操作过了，所以线程2，操作时就不满足version=1 的条件了，所以线程2无法执行成功
+课程中的使用方式是没有像cas一样带自旋的操作，也没有对version的版本号+1 ，上面的操作逻辑是在操作时，对版本号进行+1 操作，然后要求version 如果是1 的情况下，才能操作，那么第一个线程在操作后，数据库中的version变成了2，但是他自己满足version=1 ，所以没有问题，此时线程2执行，线程2 最后也需要加上条件version =1 ，但是现在由于线程1已经操作过了，所以线程2，操作时就不满足version=1 的条件了，所以线程2无法执行成功-->课程是让==stock当乐观锁==
 
 ![1653369268550](assets/1653369268550.png)
 
@@ -1384,11 +1481,11 @@ boolean success = seckillVoucherService.update()
             .eq("voucher_id", voucherId).eq("stock",voucher.getStock()).update(); //where id = ？ and stock = ?
 ```
 
-以上逻辑的核心含义是：只要我扣减库存时的库存和之前我查询到的库存是一样的，就意味着没有人在中间修改过库存，那么此时就是安全的，但是以上这种方式通过测试发现会有很多失败的情况，失败的原因在于：在使用乐观锁过程中假设100个线程同时都拿到了100的库存，然后大家一起去进行扣减，但是100个人中只有1个人能扣减成功，其他的人在处理时，他们在扣减时，库存已经被修改过了，所以此时其他线程都会失败
+以上逻辑的核心含义是：只要我扣减库存时的库存和之前我查询到的库存是一样的，就意味着没有人在中间修改过库存，那么此时就是安全的，但是以上这种方式通过测试发现会有==很多失败==的情况，失败的原因在于：在使用乐观锁过程中假设100个线程同时都拿到了100的库存，然后大家一起去进行扣减，但是100个人中只有1个人能扣减成功，其他的人在处理时，他们在扣减时，库存已经被修改过了，所以此时其他线程都会失败
 
 **修改代码方案二、**
 
-之前的方式要修改前后都保持一致，但是这样我们分析过，成功的概率太低，所以我们的乐观锁需要变一下，改成stock大于0 即可
+之前的方式要修改前后都保持一致，但是这样我们分析过，成功的概率太低，所以我们的乐观锁需要变一下，改成==stock大于0== 即可
 
 ```java
 boolean success = seckillVoucherService.update()
@@ -1524,7 +1621,11 @@ public synchronized Result createVoucherOrder(Long voucherId) {
 ```
 
 ，但是这样添加锁，锁的粒度太粗了，在使用锁过程中，控制**锁粒度** 是一个非常重要的事情，因为如果锁的粒度太大，会导致每个线程进来都会锁住，所以我们需要去控制锁的粒度，以下这段代码需要修改为：
-intern() 这个方法是从常量池中拿到数据，如果我们直接使用userId.toString() 他拿到的对象实际上是不同的对象，new出来的对象，我们使用锁必须保证锁必须是同一把，所以我们需要使用intern()方法
+==intern() 这个方法是从常量池中拿到数据==，如果我们直接使用userId.toString() 他拿到的对象实际上是==不同的对象==，**new出来的**对象，我们使用锁必须保证锁必须是**同一把**，所以我们需要使用intern()方法
+
+**为什么用不用userId？**
+
+因为userId是Long类型，每次传进来都是一个新对象，我们要将它作为锁必须取值
 
 ```java
 @Transactional
@@ -1566,15 +1667,27 @@ public  Result createVoucherOrder(Long voucherId) {
 }
 ```
 
-但是以上代码还是存在问题，问题的原因在于当前方法被spring的事务控制，如果你在方法内部加锁，可能会导致当前方法事务还没有提交，但是锁已经释放也会导致问题，所以我们选择将当前方法整体包裹起来，确保事务不会出现问题：如下：
+但是以上代码还是存在问题，问题的原因在于当前方法被spring的事务控制，如果你在方法内部加锁，可能会导致==当前方法事务还没有提交，但是锁已经释放==也会导致问题，所以我们选择将==当前方法整体包裹起来==，确保事务不会出现问题：如下：
 
 在seckillVoucher 方法中，添加以下逻辑，这样就能保证事务的特性，同时也控制了锁的粒度
 
 ![1653373434815](assets/1653373434815.png)
 
-但是以上做法依然有问题，因为你调用的方法，其实是this.的方式调用的，事务想要生效，还得利用代理来生效，所以这个地方，我们需要获得原始的事务对象， 来操作事务
+但是以上做法依然有问题，因为你调用的方法，其实是this.的方式调用的，==事务想要生效，还得利用代理来生效==，所以这个地方，我们需要获得原始的事务对象， 来操作事务
 
 ![1653383810643](assets/1653383810643.png)
+
+若想获取原始事务对象，有两种方法
+
+- **导入依赖与配置注解**
+
+<img src="assets/image-20251113234638665.png" alt="image-20251113234638665" style="zoom:67%;" />
+
+<img src="assets/image-20251113234727530.png" alt="image-20251113234727530" style="zoom:50%;" />
+
+- 依赖注入自身impl对象进行方法调用。
+
+
 
 
 
@@ -1594,7 +1707,9 @@ public  Result createVoucherOrder(Long voucherId) {
 
 **有关锁失效原因分析**
 
-由于现在我们部署了多个tomcat，每个tomcat都有一个属于自己的jvm，那么假设在服务器A的tomcat内部，有两个线程，这两个线程由于使用的是同一份代码，那么他们的锁对象是同一个，是可以实现互斥的，但是如果现在是服务器B的tomcat内部，又有两个线程，但是他们的锁对象写的虽然和服务器A一样，但是锁对象却不是同一个，所以线程3和线程4可以实现互斥，但是却无法和线程1和线程2实现互斥，这就是 集群环境下，syn锁失效的原因，在这种情况下，我们就需要使用分布式锁来解决这个问题。
+由于现在我们部署了多个tomcat，每个tomcat都有一个属于自己的jvm，那么假设在服务器A的tomcat内部，有两个线程，这两个线程由于使用的是同一份代码，那么他们的锁对象是同一个 ，是可以实现互斥的，但是如果现在是服务器B的tomcat内部，又有两个线程，但是他们的锁对象写的虽然和服务器A一样，但是锁对象却不是同一个，所以线程3和线程4可以实现互斥，但是却无法和线程1和线程2实现互斥，这就是 集群环境下，syn锁失效的原因，在这种情况下，我们就需要使用分布式锁来解决这个问题。
+
+==一个jvm只维持一个常量池，而锁监视器（锁对象）是在常量池中，即一个jvm内的多个线程对应一个锁监视器==
 
 ![1653374044740](assets/1653374044740.png)
 
@@ -1628,7 +1743,7 @@ public  Result createVoucherOrder(Long voucherId) {
 
 Mysql：mysql本身就带有锁机制，但是由于mysql性能本身一般，所以采用分布式锁的情况下，其实使用mysql作为分布式锁比较少见
 
-Redis：redis作为分布式锁是非常常见的一种使用方式，现在企业级开发中基本都使用redis或者zookeeper作为分布式锁，利用setnx这个方法，如果插入key成功，则表示获得到了锁，如果有人插入成功，其他人插入失败则表示无法获得到锁，利用这套逻辑来实现分布式锁
+Redis：redis作为分布式锁是非常常见的一种使用方式，现在企业级开发中基本都使用redis或者zookeeper作为分布式锁，利用==setnx==这个方法，如果插入key成功，则表示获得到了锁，如果有人插入成功，其他人插入失败则表示无法获得到锁，利用这套逻辑来实现分布式锁 
 
 Zookeeper：zookeeper也是企业级开发中较好的一个实现分布式锁的方案，由于本套视频并不讲解zookeeper的原理和分布式锁的实现，所以不过多阐述
 
@@ -1642,19 +1757,34 @@ Zookeeper：zookeeper也是企业级开发中较好的一个实现分布式锁�
 
   * 互斥：确保只能有一个线程获取锁
   * 非阻塞：尝试一次，成功返回true，失败返回false
+    * 获取锁失败后的行为：
+      * 阻塞等待后重新尝试。会将线程挂起，知道锁释放才会被唤醒-->性能较低
+      * 直接失败。自旋锁属于非阻塞锁的一种-->此处选择2
+
+利用setnx方法进行加锁，同时增加过期时间，==防止死锁==，此方法可以保证==加锁和增加过期时间具有**原子性**==
+
+**如何实现原子性：**
+
+redis的set命令允许同时设置过期时间与nx
+
+`SET key value [EX seconds|PX milliseconds|EXAT timestamp|PXAT milliseconds-timestamp|KEEPTTL] [NX|XX] [GET]`
+
+
 
 * 释放锁：
 
   * 手动释放
-  * 超时释放：获取锁时添加一个超时时间
+  * 超时释放：获取锁时添加一个==超时时间==-->避免死锁
 
   ![1653382669900](assets/1653382669900.png)
 
-核心思路：
+**核心思路**（非阻塞）
 
 我们利用redis 的setNx 方法，当有多个线程进入时，我们就利用该方法，第一个线程进入时，redis 中就有这个key 了，返回了1，如果结果是1，则表示他抢到了锁，那么他去执行业务，然后再删除锁，退出锁逻辑，没有抢到锁的哥们，等待一定时间后重试即可
 
- ![1653382830810](assets/1653382830810.png)
+ 
+
+![1653387398820](assets/1653387398820.png)
 
 ### 4.3 实现分布式锁版本一
 
@@ -1666,35 +1796,49 @@ Zookeeper：zookeeper也是企业级开发中较好的一个实现分布式锁�
 
 **SimpleRedisLock**
 
-利用setnx方法进行加锁，同时增加过期时间，防止死锁，此方法可以保证加锁和增加过期时间具有原子性
+利用setnx方法进行加锁，同时增加过期时间，==防止死锁==，此方法可以保证==加锁和增加过期时间具有**原子性**==
+
+==使用线程id作为value,可以判断是否为该线程创建的锁，防止误删==
 
 ```java
-private static final String KEY_PREFIX="lock:"
-@Override
-public boolean tryLock(long timeoutSec) {
-    // 获取线程标示
-    String threadId = Thread.currentThread().getId()
-    // 获取锁
-    Boolean success = stringRedisTemplate.opsForValue()
-            .setIfAbsent(KEY_PREFIX + name, threadId + "", timeoutSec, TimeUnit.SECONDS);
-    return Boolean.TRUE.equals(success);
+public class SimpleRedisLock implements ILock{
+    private String name;//业务名
+    private StringRedisTemplate stringRedisTemplate;
+
+    public SimpleRedisLock(String name, StringRedisTemplate stringRedisTemplate) {
+        this.name = name;
+        this.stringRedisTemplate = stringRedisTemplate;
+    }
+
+    private static final String KEY_PREFIX = "lock:";
+
+    @Override
+    public boolean tryLock(long timeoutSec) {
+        // 获取线程标识
+        long threadId = Thread.currentThread().getId();
+        // 获取锁
+        Boolean success = stringRedisTemplate.opsForValue()
+                .setIfAbsent(KEY_PREFIX + name,
+                             threadId + "",
+                             timeoutSec,
+                             TimeUnit.SECONDS);
+        return Boolean.TRUE.equals(success);
+	}
+    
+    @Overrid
+    public void unlock() {
+        //通过del删除锁
+        stringRedisTemplate.delete(KEY_PREFIX + name);
+	}
 }
+
 ```
 
-* 释放锁逻辑
+- 修改业务代码
 
-SimpleRedisLock
+因为我们锁的是用户，所以传用户id。若是只穿order，则会锁住整个下单业务
 
-释放锁，防止删除别人的锁
-
-```java
-public void unlock() {
-    //通过del删除锁
-    stringRedisTemplate.delete(KEY_PREFIX + name);
-}
-```
-
-* 修改业务代码
+`SimpleRedisLock lock = new SimpleRedisLock("order:" + userId, stringRedisTemplate);`
 
 ```java
   @Override
@@ -1725,7 +1869,7 @@ public void unlock() {
         if (!isLock) {
             return Result.fail("不允许重复下单");
         }
-        try {
+        try {//避免事务出现异常，导致锁无法释放
             //获取代理对象(事务)
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
@@ -1750,7 +1894,10 @@ public void unlock() {
 
 ### 4.5 解决Redis分布式锁误删问题
 
-需求：修改之前的分布式锁实现，满足：在获取锁时存入线程标示（可以用UUID表示）
+需求：修改之前的分布式锁实现，满足：在获取锁时==存入线程标示==（在jvm内，线程的Id是自增的，多个jvm时线程id可能重复。可以用==UUID==表示）
+
+UUID与线程标识相接，存入==value==-->key确保同一用户的多个线程有相同的锁对象，不能用UUID
+
 在释放锁时先获取锁中的线程标示，判断是否与当前线程标示一致
 
 * 如果一致则释放锁
@@ -1833,13 +1980,19 @@ return name
 
 写好脚本以后，需要用Redis命令来调用脚本，调用脚本的常见命令如下：
 
-![1653392181413](assets/1653392181413.png)
+![1653392181413](assets/1653392181413.png)+
 
 例如，我们要执行 redis.call('set', 'name', 'jack') 这个脚本，语法如下：
 
 ![1653392218531](assets/1653392218531.png)
 
-如果脚本中的key、value不想写死，可以作为参数传递。key类型参数会放入KEYS数组，其它参数会放入ARGV数组，在脚本中可以从KEYS和ARGV数组获取这些参数：
+如果脚本中的key、value不想写死，可以作为参数传递。
+
+**因为脚本中一定有key，所以传递的参数单独分出了一个key类型，剩余的参数属于arg**
+
+==key类型参数会放入KEYS数组，其它参数会放入ARGV数组==，在脚本中可以从KEYS和ARGV数组获取这些参数：
+
+==下表从1开始==
 
 ![1653392438917](assets/1653392438917.png)
 
@@ -1881,6 +2034,8 @@ lua脚本本身并不需要大家花费太多时间去研究，只需要知道�
 ![1653393304844](assets/1653393304844.png)
 
 **Java代码**
+
+==`DefaultRedisScript<T>`：这是RedisScript的实现类，泛型是脚本的返回类型==
 
 ```java
 private static final DefaultRedisScript<Long> UNLOCK_SCRIPT;
@@ -1927,11 +2082,11 @@ public void unlock() {
 
 **重入问题**：重入问题是指 获得锁的线程可以再次进入到相同的锁的代码块中，可重入锁的意义在于防止死锁，比如HashTable这样的代码中，他的方法都是使用synchronized修饰的，假如他在一个方法内，调用另一个方法，那么此时如果是不可重入的，不就死锁了吗？所以可重入锁他的主要意义是防止死锁，我们的synchronized和Lock锁都是可重入的。
 
-**不可重试**：是指目前的分布式只能尝试一次，我们认为合理的情况是：当线程在获得锁失败后，他应该能再次尝试获得锁。
+**不可重试**：是指目前的分布式只能尝试一次，我们认为合理的情况是：当线程在获得锁失败后，他应该能再次尝试获得锁。-->redis分布式锁本身未实现，但可以通过代码实现
 
 **超时释放：**我们在加锁时增加了过期时间，这样的我们可以防止死锁，但是如果卡顿的时间超长，虽然我们采用了lua表达式防止删锁的时候，误删别人的锁，但是毕竟没有锁住，有安全隐患
 
-**主从一致性：** 如果Redis提供了主从集群，当我们向集群写数据时，主机需要异步的将数据同步给从机，而万一在同步过去之前，主机宕机了，就会出现死锁问题。
+**主从一致性：** 如果Redis提供了主从集群，当我们向集群写数据时，主机需要异步的将数据同步给从机，而万一在同步过去之前，主机宕机了，就会出现锁失效问题。
 
 ![1653546070602](assets/1653546070602.png)
 
@@ -1955,7 +2110,7 @@ Redission提供了分布式锁的多种多样的功能
 </dependency>
 ```
 
-配置Redisson客户端：
+配置Redisson客户端：-->不用springboot配置文件，避免与spring对redis的配置混淆
 
 ```java
 @Configuration
@@ -1975,6 +2130,8 @@ public class RedissonConfig {
 ```
 
 如何使用Redission的分布式锁
+
+==trylock()==：如果不加参数，默认不重试，30秒释放
 
 ```java
 @Resource
@@ -1996,9 +2153,6 @@ void testRedisson() throws Exception{
         }
         
     }
-    
-    
-    
 }
 ```
 
@@ -2053,57 +2207,75 @@ public Result seckillVoucher(Long voucherId) {
 
 ### 5.3 分布式锁-redission可重入锁原理
 
+加锁和删锁时，都要重置锁 的有效期，为其他业务提供充足的时间
+
+![1653548087334](assets/1653548087334.png)
+
 在Lock锁中，他是借助于底层的一个voaltile的一个state变量来记录重入的状态的，比如当前没有人持有这把锁，那么state=0，假如有人持有这把锁，那么state=1，如果持有这把锁的人再次持有这把锁，那么state就会+1 ，如果是对于synchronized而言，他在c语言代码中会有一个count，原理和state类似，也是重入一次就加一，释放一次就-1 ，直到减少成0 时，表示当前这把锁没有被人持有。  
 
 在redission中，我们的也支持支持可重入锁
 
-在分布式锁中，他采用hash结构用来存储锁，其中大key表示表示这把锁是否存在，用小key表示当前这把锁被哪个线程持有，所以接下来我们一起分析一下当前的这个lua表达式
+在分布式锁中，他采用hash结构用来存储锁，其中大key表示表示这把锁是否存在，用小key表示当前这把锁被哪个线程持有，所以接下来我们一起分析一下当前的这个lua表达式：
 
-这个地方一共有3个参数
+**获取锁**
 
-**KEYS[1] ： 锁名称**
+![image-20251114191343082](assets/image-20251114191343082.png)
 
-**ARGV[1]：  锁失效时间**
+**释放锁**
 
-**ARGV[2]：  id + ":" + threadId; 锁的小key**
+![image-20251114191442917](assets/image-20251114191442917.png)
 
-exists: 判断数据是否存在  name：是lock是否存在,如果==0，就表示当前这把锁不存在
+**源码：**
 
-redis.call('hset', KEYS[1], ARGV[2], 1);此时他就开始往redis里边去写数据 ，写成一个hash结构
-
-Lock{
-
-​    id + **":"** + threadId :  1
-
-}
-
-如果当前这把锁存在，则第一个条件不满足，再判断
-
-redis.call('hexists', KEYS[1], ARGV[2]) == 1
-
-此时需要通过大key+小key判断当前这把锁是否是属于自己的，如果是自己的，则进行
-
-redis.call('hincrby', KEYS[1], ARGV[2], 1)
-
-将当前这个锁的value进行+1 ，redis.call('pexpire', KEYS[1], ARGV[1]); 然后再对其设置过期时间，如果以上两个条件都不满足，则表示当前这把锁抢锁失败，最后返回pttl，即为当前这把锁的失效时间
-
-如果小伙帮们看了前边的源码， 你会发现他会去判断当前这个方法的返回值是否为null，如果是null，则对应则前两个if对应的条件，退出抢锁逻辑，如果返回的不是null，即走了第三个分支，在源码处会进行while(true)的自旋抢锁。
+**tryLock**
 
 ```lua
-"if (redis.call('exists', KEYS[1]) == 0) then " +
-                  "redis.call('hset', KEYS[1], ARGV[2], 1); " +
-                  "redis.call('pexpire', KEYS[1], ARGV[1]); " +
-                  "return nil; " +
-              "end; " +
-              "if (redis.call('hexists', KEYS[1], ARGV[2]) == 1) then " +
-                  "redis.call('hincrby', KEYS[1], ARGV[2], 1); " +
-                  "redis.call('pexpire', KEYS[1], ARGV[1]); " +
-                  "return nil; " +
-              "end; " +
-              "return redis.call('pttl', KEYS[1]);"
+local key = KEYS[1]
+local ttl = ARGV[1]
+local field = ARGV[2]
+
+if redis.call('exists', key) == 0 then
+    redis.call('hincrby', key, field, 1)
+    redis.call('pexpire', key, ttl)
+    return nil
+end
+
+if redis.call('hexists', key, field) == 1 then
+    redis.call('hincrby', key, field, 1)
+    redis.call('pexpire', key, ttl)
+    return nil
+end
+
+return redis.call('pttl', key)
 ```
 
-![1653548087334](assets/1653548087334.png)
+**unLock**
+
+```lua
+local key  = KEYS[1]
+local channel = KEYS[2]
+local msg  = ARGV[1]
+local ttl = ARGV[2]
+local field = ARGV[3]
+
+if redis.call('hexists', key, field) == 0 then
+    return nil
+end
+
+local counter = redis.call('hincrby', key, field, -1)
+if counter > 0 then
+    redis.call('pexpire', key, ttl)
+    return 0
+else
+    redis.call('del', key)
+    -- 发送信号+
+    ：锁已释放，等待被外部程序接收
+    redis.call('publish', channel, msg)
+    return 1
+end
+```
+
+
 
 ### 5.4 分布式锁-redission锁重试和WatchDog机制
 

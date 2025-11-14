@@ -68,7 +68,6 @@ BufferedWriter bw = new BufferedWriter(new FileWriter("bw.txt"));
 * BufferedWriter
   * `public void newLine()`: 跨平台的换行。写一行行分隔符,由系统属性定义符号。 
 
-
 `readLine`方法演示，代码如下：
 
 ```java
@@ -116,7 +115,7 @@ public class BufferedWriterDemo throws IOException {
 
 
 
-# 2. 转换流
+# 2. ~~转换流~~
 
 <img src="assets/image-20250608202011819.png" alt="image-20250608202011819" style="zoom:50%;" />
 

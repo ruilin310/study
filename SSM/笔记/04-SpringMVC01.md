@@ -1281,7 +1281,7 @@ public String commonParamDifferentName(String userName , int age){
 ```java
 @RequestMapping("/commonParamDifferentName")
     @ResponseBody
-    public String commonParamDifferentName(@RequestPaam("name") String userName , int age){
+    public String commonParamDifferentName(@RequestParam("name") String userName , int age){
         System.out.println("普通参数传递 userName ==> "+userName);
         System.out.println("普通参数传递 age ==> "+age);
         return "{'module':'common param different name'}";

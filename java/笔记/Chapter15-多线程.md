@@ -1109,10 +1109,10 @@ executor[执行者]，cache[隐藏，高速缓冲器]
 
 概述 : JDK对线程池也进行了相关的实现，在真实企业开发中我们也很少去自定义线程池，而是使用JDK中自带的线程池。
 
-我们可以使用Executors中所提供的**静态**方法来创建线程池
+我们可以使用==Executors==中所提供的**静态**方法来创建线程池
 
 - `static ExecutorService newCachedThreadPool()`  : 创建一个默认的线程池
-- `static newFixedThreadPool(int nThreads)`:创建一个指定最多线程数量的线程池
+- `static ExecutorService newFixedThreadPool(int nThreads)`:创建一个指定最多线程数量的线程池
 
 **基本方法:**
 
